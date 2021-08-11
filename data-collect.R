@@ -2,7 +2,9 @@
 
 library(geckor)  # Collector for Coingecko API
 library(ggplot2)  # Plotting
+library(tseries)
 
+setwd("Desktop/jiin-justin/mkt-bubbles")
 source("common.R")  # Fns for stylized facts
 
 options(scipen = 999)
@@ -64,3 +66,8 @@ calc_hurst(btc.ts)
 calc_hill(btc.ts)
 calc_jb(btc.ts)
 calc_adf(btc.ts)
+
+# =================== STEP 4. Block bootstrap ===================
+# https://rdrr.io/cran/tseries/man/tsbootstrap.html
+boot = tsbootstrap(btc.ts, type="block", b=200,
+                   statistic=mean)
