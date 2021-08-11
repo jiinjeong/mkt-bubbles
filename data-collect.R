@@ -2,8 +2,10 @@
 
 library(geckor)  # Collector for Coingecko API
 library(ggplot2)  # Plotting
-options(scipen = 999)
+
 source("common.R")  # Fns for stylized facts
+
+options(scipen = 999)
 
 # =================== STEP 1. Collect historic data. ===================
 btc = coin_history(
