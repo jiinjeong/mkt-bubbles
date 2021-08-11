@@ -10,6 +10,7 @@ source("common.R")  # Fns for stylized facts
 options(scipen = 999)
 
 # =================== STEP 1. Collect historic data. ===================
+# Bitcoin Daily Data in USD
 btc = coin_history(
   coin_id = "bitcoin",
   vs_currency = "usd",
@@ -19,18 +20,38 @@ btc = coin_history(
 btc = btc[order(as.Date(btc$timestamp, format="%Y-%m-%d")),]  # Order by date
 
 # Calculate simple and CC (log) returns
-ccReturn = diff(log(btc$price))
-simpleReturn = exp(ccReturn) - 1
-date = as.Date(btc$timestamp[2:length(btc$timestamp)])
+btc.cc = diff(log(btc$price))
+btc.simple = exp(btc.cc) - 1
+btc.date = as.Date(btc$timestamp[2:length(btc$timestamp)])
 
 btc.df = data.frame(
-  "date" = date,
+  "date" = btc.date,
   "price" = as.vector(btc$price[2:length(btc$price)]),
-  "simple" = simpleReturn,
-  "cc" = ccReturn
+  "simple" = btc.simple,
+  "cc" = btc.cc
 )
 
 btc.ts = crypto_to_ts(btc.df)  # Time series data
+
+# Vanguard S&P 500 Index Daily Data
+sp500 = get.hist.quote(instrument="vfinx", quote="AdjClose",
+                      provider="yahoo", origin="1970-01-01",
+                      compression="d", retclass="zoo")
+# start=start.date, end=end.date, 
+sp500
+sp500.cc = diff(log(sp500$Adjusted))
+sp500.simple = exp(sp500.cc) - 1
+sp500.date = as.Date(index(sp500)[2:length(sp500$Adjusted)])
+sp500.df = data.frame(
+  "date" = sp500.date,
+  "price" = as.vector(sp500$Adjusted[2:length(sp500$Adjusted)]),
+  "simple" = sp500.simple,
+  "cc" = sp500.cc
+)
+rownames(sp500.df) = NULL
+sp500.df
+sp500.ts = crypto_to_ts(sp500.df)  # Time series data
+
 
 # =================== STEP 2. Basic Plots ===================
 # Time series plot of historical Bitcoin price and returns
@@ -38,6 +59,8 @@ ggplot(btc.df, aes(x=date, y=price)) + geom_line()
 ggplot(btc.df, aes(x=date)) + 
   geom_line(aes(y=ccReturn), color="red") +
   geom_line(aes(y=simpleReturn), color="black")
+
+ggplot(sp500.df, aes(x=date, y=price)) + geom_line()
 
 # Histogram + QQPlot + More
 par(mfrow=c(2,2))
@@ -55,6 +78,7 @@ par(mfrow=c(1,1))
 acf_abs = acf(abs(btc.ts), lwd=2, type = c("correlation"), lag.max=100)  # Autocorrelation
 acf_sq = acf(btc.ts * btc.ts, lwd=2, type = c("correlation"), lag.max=100)
 
+
 # =================== STEP 3. Basic Stats ===================
 sd(btc.ts)  # Std Dev
 skewness(btc.ts)
@@ -66,6 +90,7 @@ calc_hurst(btc.ts)
 calc_hill(btc.ts)
 calc_jb(btc.ts)
 calc_adf(btc.ts)
+
 
 # =================== STEP 4. Block bootstrap ===================
 # https://rdrr.io/cran/tseries/man/tsbootstrap.html
