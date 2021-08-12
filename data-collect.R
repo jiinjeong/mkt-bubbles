@@ -10,7 +10,7 @@ source("common.R")  # Fns for stylized facts
 options(scipen = 999)
 
 # =================== STEP 1. Collect historic data. ===================
-# Bitcoin Daily Data in USD
+# ----------- a. Bitcoin Daily Data in USD
 btc = coin_history(
   coin_id = "bitcoin",
   vs_currency = "usd",
@@ -33,7 +33,7 @@ btc.df = data.frame(
 
 btc.ts = crypto_to_ts(btc.df)  # Time series data
 
-# Vanguard S&P 500 Index Daily Data
+# ----------- b. Vanguard S&P 500 Index Daily Data
 sp500 = get.hist.quote(instrument="vfinx", quote="AdjClose",
                       provider="yahoo", origin="1970-01-01",
                       compression="d", retclass="zoo")
@@ -57,8 +57,8 @@ sp500.ts = crypto_to_ts(sp500.df)  # Time series data
 # Time series plot of historical Bitcoin price and returns
 ggplot(btc.df, aes(x=date, y=price)) + geom_line()
 ggplot(btc.df, aes(x=date)) + 
-  geom_line(aes(y=ccReturn), color="red") +
-  geom_line(aes(y=simpleReturn), color="black")
+  geom_line(aes(y=btc.cc), color="red") +
+  geom_line(aes(y=btc.simple), color="black")
 
 ggplot(sp500.df, aes(x=date, y=price)) + geom_line()
 
@@ -94,5 +94,38 @@ calc_adf(btc.ts)
 
 # =================== STEP 4. Block bootstrap ===================
 # https://rdrr.io/cran/tseries/man/tsbootstrap.html
-boot = tsbootstrap(btc.ts, type="block", b=200,
-                   statistic=mean)
+
+# 0. Reduce the time series.
+# 1. Subdivide the time series into X non-overlapping number of blocks.
+# 2. Construct a new series, from X random draws with replacement
+# 3. Compute moments of the new series from 2.
+# 4. Repeat stpes 1-3 for 5k times. Get a frequency distribution for each of the moments. (Ideally, empirical in the center)
+
+boot = tsbootstrap(btc.ts, type="block", b=200, nb=10)
+length(btc.ts)
+length(boot)
+
+# Moment 1: Mean value of the absolute returns
+m1 = mean(abs(btc.ts))
+m1
+
+# Moment 2: First-order autocorrelation of the raw returns.
+m2 = acf(abs(btc.ts))
+m2
+
+# Moment 3-8: ACF of the absolute returns up to a lag of 100 days.
+# Six coefficients for the lags τ = 1, 5, 10, 25, 50, 100.
+m3 = acf(abs(btc.ts), lwd=2, 
+         type = c("correlation"),
+         lag.max=100)  # Autocorrelation
+m3
+
+# Moment 9: Hill estimator
+m9 = calc_hill(btc.ts)
+m9
+
+moments = matrix(c(m1, NA, NA,
+                   NA, NA, NA,
+                   NA, NA, m9),
+                 nrow = 9, ncol = 1)
+moments
