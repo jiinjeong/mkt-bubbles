@@ -101,9 +101,54 @@ calc_adf(btc.ts)
 # 3. Compute moments of the new series from 2.
 # 4. Repeat stpes 1-3 for 5k times. Get a frequency distribution for each of the moments. (Ideally, empirical in the center)
 
-boot = tsbootstrap(btc.ts, type="block", b=200, nb=10)
-length(btc.ts)
-length(boot)
+k = 5000
+
+btc.boot = tsbootstrap(btc.ts, type="block", b=500, nb=k)  # Increase to 5k eventually.
+btc.orig.mean = mean(btc.ts)
+btc.orig.mean
+btc.moments.matrix = matrix(nrow=k, ncol=3)
+btc.mean.matrix = matrix(nrow=k)
+btc.std.matrix = matrix(nrow=k)
+btc.q.matrix = matrix(nrow=k)
+
+btc.moments.orig = matrix(c(mean(btc.ts),
+                            sd(btc.ts),
+                            calc_q_ratio(btc.ts)),
+                          nrow=1, ncol=3)
+
+# Do a for loop and get the moments from each boot
+for (i in 1:k) {
+  btc.mean.matrix[i] = mean(btc.boot[,i])
+  btc.std.matrix[i] = sd(btc.boot[,i])
+  btc.q.matrix[i] = calc_q_ratio(btc.boot[,i])
+}
+
+# Combined matrix of all moments (5000 rows x 3 col)
+btc.moments.matrix = cbind(btc.mean.matrix,
+                           btc.std.matrix,
+                           btc.q.matrix)
+# Matrix of the mean of all moments (1 row x 3 col)
+btc.moments.mean.matrix = cbind((mean(btc.mean.matrix)),
+                                (mean(btc.std.matrix)),
+                                (mean(btc.q.matrix)))
+
+plot(density(btc.mean.matrix), main="smoothed density", 
+     type="l",xlab="daily return",
+     ylab="density estimate")
+
+total_sum = 0
+
+for (i in 1:k) {
+  mb = btc.moments.matrix[i,] - btc.moments.mean.matrix
+  mbar = btc.moments.mean.matrix
+  # (1 x 3) * (3 x 1) becomes an int
+  total_sum = total_sum + ((mb - mbar) %*% t(mb - mbar))
+}
+
+total_sum / k  # Estimate of the moments' variance-covariance matrix
+
+
+##### ACTUAL MOMENTS
 
 # Moment 1: Mean value of the absolute returns
 m1 = mean(abs(btc.ts))
@@ -112,6 +157,9 @@ m1
 # Moment 2: First-order autocorrelation of the raw returns.
 m2 = acf(abs(btc.ts))
 m2
+
+m2 = sd(btc.ts)
+m8 = calc_hurst(btc.ts)
 
 # Moment 3-8: ACF of the absolute returns up to a lag of 100 days.
 # Six coefficients for the lags τ = 1, 5, 10, 25, 50, 100.
@@ -128,4 +176,3 @@ moments = matrix(c(m1, NA, NA,
                    NA, NA, NA,
                    NA, NA, m9),
                  nrow = 9, ncol = 1)
-moments
