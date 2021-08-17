@@ -86,3 +86,4 @@ calc_adf <- function(crypto_ts){
   colnames(temp_unit_root) = c("lag","adf","adf-p","pp","pp-p")
   return(temp_unit_root)
 }
+
