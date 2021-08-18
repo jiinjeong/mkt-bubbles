@@ -5,7 +5,7 @@ library(ggplot2)  # Plotting
 library(tseries)  # Times Series Data
 library(forecast)  # Autocorrelation
 
-setwd("Desktop/jiin-justin/mkt-bubbles")
+setwd("/Users/Jiin/Desktop/jiin-justin/mkt-bubbles")
 source("common.R")  # Fns for stylized facts
 
 options(scipen = 999)
@@ -145,7 +145,7 @@ calc_moments <- function(ts){
 
 get_weighting_matrix <- function(){
     k = 100  # 5000 to match the paper
-    block_size = 500
+    block_size = 500  # Diff block sizes later on (250, 750)
     n_moments = 9
     
     btc.boot = tsbootstrap(btc.ts, type="block", b=block_size, nb=k)  # Increase to 5k eventually.
@@ -192,9 +192,84 @@ get_weighting_matrix <- function(){
 }
 
 load("btc.weighting.Rdata")
+btc.weighting
 
 # =================== STEP 6. Parameter stuff ===================
 # theta = (p1, p2, p3, p4, p5, p6)
 # Parameter
 # How do we simulate model with params?
 
+# Initialize parameters - Latin hypercube.
+
+# Nelder Mead: https://www.rdocumentation.org/packages/lme4/versions/1.1-13/topics/NelderMead
+# LHS: https://www.rdocumentation.org/packages/pse/versions/0.4.7/topics/LHS
+library(lhs)
+randomLHS(5, 4)
+
+pop = seq.int(0, 1000, 1)
+memory = seq.int(0, 500, 5)
+startprice = seq.int(10, 100, 10)
+params <- expand.grid(pop, memory, startprice)
+
+set.seed(1213)
+X <- randomLHS(n = 10, k = 3)
+
+# pairs(X, labels = c("Memory","Start Price","Params"))
+Y <- X
+Y[,1] <- 1 + floor(X[,1] * length(pop))  # 1st col
+Y[,2] <- 1 + floor(X[,2] * length(memory))  # 2nd col
+Y[,3] <- 1 + floor(X[,3] * length(startprice))  # 3rd col
+
+actual_lhs = matrix(nrow=10, ncol=3)
+
+for (i in 1:10){
+  row = Y[i,]
+  print(row)
+  actual_lhs[i,1] = pop[row[1]]
+  actual_lhs[i,2] = memory[row[2]]
+  actual_lhs[i,3] = startprice[row[3]]
+}
+actual_lhs  # LHS Combo params
+
+###### Simulated model data.
+btc = read.csv("btc.csv")
+load("btc.moments.Rdata")
+load("btc.weighting.Rdata")
+
+btc.moments.orig.matrix
+
+load("run601.Rdata")
+run601.cc = diff(log(run601))
+run601.simple = exp(run601.cc) - 1
+run601.date = seq.int(1, 600, 1)
+
+run601.df = data.frame(
+  "date" = run601.date,
+  "price" = as.vector(run601[2:length(run601)]),
+  "simple" = run601.simple,
+  "cc" = run601.cc
+)
+# write.csv(run601.df, file="run601.csv")
+run601.df = read.csv("run601.csv")
+run601.ts = run601.df$cc
+
+run601.moments = calc_moments(run601.ts)
+# (1 x 9) x (9 x 9)  x (9 x 1) --> int
+
+eq12 <- function(model.moments, emp.moments,
+                 weighting){
+  eq12part1 = t(model.moments - emp.moments)
+  eq12part2 = weighting
+  eq12part3 = model.moments - emp.moments
+  eq12part1 %*% eq12part2 %*% eq12part3
+}
+eq12(run601.moments, btc.moments.orig.matrix, btc.weighting)
+
+
+# popsize 200  --> (0, 1000)
+# memory 200  --> (0, 500)
+# pupdate 0.50  --> (0, 1)
+# startPrice 10 --> (10, 100)
+# interest 0.05  --> (0, 1)
+# dividend 0.5  --> (0, 10)
+# pshock 0.8  --> (0, 1)
