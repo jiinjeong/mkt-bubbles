@@ -1,14 +1,13 @@
-# Jiin. Aug 11, 2021.
-
 library(geckor)  # Collector for Coingecko API
 library(ggplot2)  # Plotting
 library(tseries)  # Times Series Data
 library(forecast)  # Autocorrelation
 
-setwd("/Users/Jiin/Desktop/jiin-justin/mkt-bubbles")
+source("/Users/Jiin/Desktop/market_sim_ml_bubbles/core/singleRun.r")  # Prof. Georges' Single Run Code
+setwd("/Users/Jiin/Desktop/jiin-justin/mkt-bubbles")  # This Code Directory
 source("common.R")  # Fns for stylized facts
-
 options(scipen = 999)
+set.seed(1213)  # Randomness
 
 # =================== STEP 1. Collect historic data. ===================
 # ----------- a. Bitcoin Daily Data in USD
@@ -58,13 +57,6 @@ collect_sp500 <- function(){
     # write.csv(sp500.df, file="sp500.csv")
 }
 
-##### TO REUSE DATA
-btc.df = data.frame(read.csv("btc.csv"))
-btc.df$date = as.Date(btc.df$date)
-btc.ts = crypto_to_ts(btc.df)  # Time series data
-sp500.df = data.frame(read.csv("sp500.csv"))
-sp500.df$date = as.Date(sp500.df$date)
-sp500.ts = crypto_to_ts(sp500.df)  # Time series data
 
 # =================== STEP 2. Basic Plots and Stats ===================
 basic_plots <- function(){
@@ -102,7 +94,9 @@ basic_stats <- function(){
     calc_adf(btc.ts)
 }
 
+
 # =================== STEP 3. Moments ===================
+# Returns a 9 x 1 matrix of 9 moments calculated.
 calc_moments <- function(ts){
   # Moment 1: Mean value of the absolute returns
   m1 = mean(abs(ts))
@@ -134,142 +128,188 @@ calc_moments <- function(ts){
   return(moments)
 }
 
-# =================== STEP 4. Block bootstrap ===================
+
+# =================== STEP 4. Block bootstrap & Weighting matrix ===================
 # https://rdrr.io/cran/tseries/man/tsbootstrap.html
 
 # 0. Reduce the time series.
 # 1. Subdivide the time series into X non-overlapping number of blocks.
 # 2. Construct a new series, from X random draws with replacement
 # 3. Compute moments of the new series from 2.
-# 4. Repeat stpes 1-3 for 5k times. Get a frequency distribution for each of the moments. (Ideally, empirical in the center)
+# 4. Repeat steps 1-3 for 5k times. Get a frequency distribution for each of the moments. (Ideally, empirical in the center)
 
-get_weighting_matrix <- function(){
-    k = 100  # 5000 to match the paper
-    block_size = 500  # Diff block sizes later on (250, 750)
-    n_moments = 9
-    
-    btc.boot = tsbootstrap(btc.ts, type="block", b=block_size, nb=k)  # Increase to 5k eventually.
-    btc.moments.matrix = matrix(nrow=n_moments, ncol=k)  # 9 row x 5000 col
-    btc.moments.orig.matrix = calc_moments(btc.ts)  # 9 x 1
-    
-    # Do a for loop and get the moments from each boot
+k = 10  # 5000 to match the paper
+block_size = 500  # Diff block sizes later on (250, 750)
+n_moments = 9
+
+# Returns a block bootstrap time series.
+get_bootstrap <- function(ts, k, block_size){
+    return(tsbootstrap(ts, type="block", b=block_size, nb=k))
+}
+
+# Returns a 9 x 1 matrix of actual moments from the empirical data (BTC, S&P500).
+get_moments_emp <- function(ts){
+  return(calc_moments(ts))
+}
+
+# Returns a 9 x k (5000) matrix of moments from the blocks.
+get_moments_block <- function(ts, k, block_size, n_moments){
+  boot = get_bootstrap(ts, k, block_size)
+  moments.block.matrix = matrix(nrow=n_moments, ncol=k)  # 9 row x k col
+
+  # Do a for loop and get the moments from each boot
+  for (i in 1:k) {
+    print(i)
+    moments.block.matrix[,i] = calc_moments(boot[,i])
+  }
+  # save(moments.block.matrix, file="moments.block.Rdata")
+  # load("moments.block.Rdata")
+  return(moments.block.matrix)
+}
+
+# Returns a 9 x 1 mean matrix of all block moments.
+get_moments_block_mean <- function(moments.block.matrix){
+    return(matrix(rowMeans(moments.block.matrix),
+                  nrow=n_moments, ncol=1))
+}
+
+# Gets a 9 x 9 weighting matrix. (Eq 10 & 11 in Frank-Westerhoff)
+get_weighting_matrix <- function(moments.block.matrix, moments.block.mean.matrix){
+    total_sum = matrix(rep(0, 81), nrow=9, ncol=9)
     for (i in 1:k) {
-      print(i)
-      btc.moments.matrix[,i] = calc_moments(btc.boot[,i])
-    }
-    btc.moments.matrix
-    # save(btc.moments.matrix, file="btc.moments.Rdata")
-    # load("btc.moments.Rdata")
-    
-    # Matrix of the mean of all moments (9 x 1)
-    btc.moments.mean.matrix = matrix(rowMeans(btc.moments.matrix),
-                                    nrow=n_moments, ncol=1)
-    btc.moments.mean.matrix
-    
-    # First row matrix
-    plot(density(btc.moments.matrix[1,]), main="smoothed density", 
-         type="l",xlab="daily return",
-         ylab="density estimate")
-    btc.moments.orig.matrix  # 1st item.
-    
-    total_sum = matrix(rep(0, 81),
-                       nrow=9, ncol=9)
-    for (i in 1:k) {
-      mb = btc.moments.matrix[,i] - btc.moments.mean.matrix
-      mbar = btc.moments.mean.matrix
+      mb = moments.block.matrix[,i] - moments.block.mean.matrix
+      mbar = moments.block.mean.matrix
       each_result = (mb - mbar) %*% t(mb - mbar)
       # print(each_result)
       # (9 x 1) * (1 x 9) = (9 x 9) matrix
       total_sum = total_sum + each_result
     }
-    
-    total_sum
     sigma_hat = total_sum / k  # Estimate of the moments' variance-covariance matrix
-    btc.weighting = solve(sigma_hat)  # Weighting matrix
-    btc.weighting
-    
-    # save(btc.weighting, file="btc.weighting.Rdata")
+    weighting = solve(sigma_hat)  # Weighting matrix
+
+    return(weighting)
 }
 
-load("btc.weighting.Rdata")
-btc.weighting
+# Checks whether the center of the desired moment's frequency distribution = empirical center.
+check_empirical_center <- function(moment=1, moments.emp.matrix, moments.block.matrix){
+  # First row matrix
+  plot(density(moments.block.matrix[moment,]), main="smoothed density", 
+       type="l",xlab="daily return",
+       ylab="density estimate")
+  moments.emp.matrix[moment]  # 1st item.
+}
 
-# =================== STEP 6. Parameter stuff ===================
-# theta = (p1, p2, p3, p4, p5, p6)
-# Parameter
-# How do we simulate model with params?
-
-# Initialize parameters - Latin hypercube.
-
-# Nelder Mead: https://www.rdocumentation.org/packages/lme4/versions/1.1-13/topics/NelderMead
+# =================== STEP 5. Initialize parameters (Latin Hypercube) ===================
 # LHS: https://www.rdocumentation.org/packages/pse/versions/0.4.7/topics/LHS
 library(lhs)
-randomLHS(5, 4)
 
+# Three parameters to begin with and their range, step size.
+n_param = 3
 pop = seq.int(0, 1000, 1)
 memory = seq.int(0, 500, 5)
 startprice = seq.int(10, 100, 10)
-params <- expand.grid(pop, memory, startprice)
+# params <- expand.grid(pop, memory, startprice)
+n_lhc_set = 10  # 10 combos of Latin Hypercube param sets
 
-set.seed(1213)
-X <- randomLHS(n = 10, k = 3)
-
-# pairs(X, labels = c("Memory","Start Price","Params"))
-Y <- X
-Y[,1] <- 1 + floor(X[,1] * length(pop))  # 1st col
-Y[,2] <- 1 + floor(X[,2] * length(memory))  # 2nd col
-Y[,3] <- 1 + floor(X[,3] * length(startprice))  # 3rd col
-
-actual_lhs = matrix(nrow=10, ncol=3)
-
-for (i in 1:10){
-  row = Y[i,]
-  print(row)
-  actual_lhs[i,1] = pop[row[1]]
-  actual_lhs[i,2] = memory[row[2]]
-  actual_lhs[i,3] = startprice[row[3]]
+# Gets initial params through Latin Hypercube
+get_initial_params <- function(n_lhc_set, n_param){
+  X <- randomLHS(n = n_lhc_set, k = n_param)
+  Y <- X
+  lengths <- c(length(pop), length(memory), length(startprice))
+  # These are indices
+  for (i in 1:n_param){
+    Y[,i] <- 1 + floor(Y[,i] * lengths[i])  # Store in each column (Column 1: Pop, 2: Memory, 3: StartPrice)
+  }
+  # These are the actual params
+  actual_lhs = matrix(nrow=n_lhc_set, ncol=n_param)
+  for (i in 1:n_lhc_set){
+    row = Y[i,]
+    actual_lhs[i,1] = pop[row[1]]
+    actual_lhs[i,2] = memory[row[2]]
+    actual_lhs[i,3] = startprice[row[3]]
+  }
+  return(actual_lhs)  # LHC Combo params
 }
-actual_lhs  # LHS Combo params
 
-###### Simulated model data.
-btc = read.csv("btc.csv")
-load("btc.moments.Rdata")
-load("btc.weighting.Rdata")
 
-btc.moments.orig.matrix
+# =================== STEP 6. Optimize parameters (Nelder-Mead) ===================
+# Nelder Mead: https://www.rdocumentation.org/packages/lme4/versions/1.1-13/topics/NelderMead
+# Gets moments from simulated model of n_rounds.
+get_moments_from_simulation <- function(simulation, n_rounds){
+    simulation.cc = diff(log(simulation))
+    simulation.simple = exp(simulation.cc) - 1
+    simulation.date = seq.int(1, n_rounds, 1)
+    
+    simulation.df = data.frame(
+      "date" = simulation.date,
+      "price" = as.vector(run601[2:length(simulation)]),
+      "simple" = simulation.simple,
+      "cc" = simulation.cc
+    )
+    simulation.ts = simulation.df$cc
+    simulation.moments = calc_moments(simulation.ts[500:length(simulation) - 1])
+    return(simulation.moments)
+}
 
-load("run601.Rdata")
-run601.cc = diff(log(run601))
-run601.simple = exp(run601.cc) - 1
-run601.date = seq.int(1, 600, 1)
-
-run601.df = data.frame(
-  "date" = run601.date,
-  "price" = as.vector(run601[2:length(run601)]),
-  "simple" = run601.simple,
-  "cc" = run601.cc
-)
-# write.csv(run601.df, file="run601.csv")
-run601.df = read.csv("run601.csv")
-run601.ts = run601.df$cc
-
-run601.moments = calc_moments(run601.ts)
-# (1 x 9) x (9 x 9)  x (9 x 1) --> int
-
-eq12 <- function(model.moments, emp.moments,
-                 weighting){
-  eq12part1 = t(model.moments - emp.moments)
+# Gets value to minimize from Eq12 in Frank - Westerhoff
+get_eq12_minimization <- function(x, n_rounds, moments.emp, weighting){
+  print("Parameters")
+  print(x)
+  
+  # Get market simulation (using Prof. Georges code)
+  MO$numAgents = round(x[1])
+  MO$memory = round(x[2])
+  MO$startPrice = x[3]
+  market = main(MarketObject = MO)
+  moments.simulation = get_moments_from_simulation(market, n_rounds)
+  
+  eq12part1 = t(moments.simulation - moments.emp)
   eq12part2 = weighting
-  eq12part3 = model.moments - emp.moments
-  eq12part1 %*% eq12part2 %*% eq12part3
+  eq12part3 = moments.simulation - moments.emp
+  # (1 x 9) x (9 x 9)  x (9 x 1) --> int
+  result = eq12part1 %*% eq12part2 %*% eq12part3
+
+  print("Minimization #")
+  print(result)
+  return(result)
 }
-eq12(run601.moments, btc.moments.orig.matrix, btc.weighting)
 
+###### 
+get_eq12_minimization(c(488, 29, 9), 600, btc.moments.orig.matrix, btc.weighting)
 
-# popsize 200  --> (0, 1000)
-# memory 200  --> (0, 500)
+setwd("/Users/Jiin/Desktop/jiin-justin/mkt-bubbles")
+setwd("/Users/Jiin/Desktop/market_sim_ml_bubbles")
+##### TO REUSE DATA
+btc.df = data.frame(read.csv("data/btc.csv"))
+btc.df$date = as.Date(btc.df$date)
+btc.ts = crypto_to_ts(btc.df)  # Time series data
+sp500.df = data.frame(read.csv("data/sp500.csv"))
+sp500.df$date = as.Date(sp500.df$date)
+sp500.ts = crypto_to_ts(sp500.df)  # Time series data
+load("data/btc.moments.emp.Rdata")
+load("data/btc.moments.block.100.Rdata")
+load("data/btc.weighting.Rdata")
+check_empirical_center(5, btc.moments.emp.matrix, btc.moments.block.100.matrix)
+###### Simulated model data.
+load("data/run601.Rdata")
+run601.df = read.csv("data/run601.csv")
+
+library(lme4)
+nm_result = Nelder_Mead(par=c(487, 140, 90),
+                       lower=c(0, 0, 10),
+                       upper=c(1000, 500, 100),
+                       fn=eq12, 
+                       control=list(maxfun=5,
+                                    xst=c(5, 5, 1)))
+nm_result$fval
+nm_result$par
+
+save(actual_lhs, file="actual_lhs.Rdata")
+
+# popsize 200  --> (0, 1000) --> 1
+# memory 200  --> (0, 500)  --> 5
 # pupdate 0.50  --> (0, 1)
-# startPrice 10 --> (10, 100)
+# startPrice 10 --> (10, 100) --> 10
 # interest 0.05  --> (0, 1)
 # dividend 0.5  --> (0, 10)
 # pshock 0.8  --> (0, 1)

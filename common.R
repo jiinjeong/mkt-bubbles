@@ -1,6 +1,4 @@
-# Jiin. Aug 11, 2021.
 # Basic stylized facts.
-
 library(xts)
 library(PerformanceAnalytics)
 library(pracma)  # Hurst
@@ -65,25 +63,3 @@ calc_jb <- function(crypto_ts){
   jb = jb.test(crypto_ts)  # Jarque-Bera Test for normality
   return(jb$p.value)  # Null: Skewness = 0 & Excess kurtosis = 0
 }
-
-# Augmented Dickey-Fuller Test
-calc_adf <- function(crypto_ts){
-  transformed_crypto_ts = coredata(crypto_ts)
-  temp_unit_root = c()
-  
-  # For the PP test, we use lag.short, where lags = floor(4*(length(x)/100)^0.25)
-  pp = aTSA::pp.test(transformed_crypto_ts, lag.short=TRUE)
-  # For ADF test, we use the same number of lags as the pp test
-  adf = aTSA::adf.test(transformed_crypto_ts, nlag=pp[1,1] + 1)
-  
-  # "lag","adf","adf-p","pp","pp-p"
-  temp_unit_root = c(temp_unit_root, pp[1,1])
-  temp_unit_root = c(temp_unit_root, adf$type1[nrow(adf$type1),2])
-  temp_unit_root = c(temp_unit_root, adf$type1[nrow(adf$type1),3])
-  temp_unit_root = c(temp_unit_root, pp[1,2])
-  temp_unit_root = c(temp_unit_root, pp[1,3])
-  temp_unit_root = t(as.matrix(temp_unit_root))
-  colnames(temp_unit_root) = c("lag","adf","adf-p","pp","pp-p")
-  return(temp_unit_root)
-}
-
