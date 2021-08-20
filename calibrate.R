@@ -91,7 +91,6 @@ basic_stats <- function(){
     calc_hurst(btc.ts)
     calc_hill(btc.ts)
     calc_jb(btc.ts)
-    calc_adf(btc.ts)
 }
 
 
