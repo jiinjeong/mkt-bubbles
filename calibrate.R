@@ -203,6 +203,14 @@ check_empirical_center <- function(moment=1, moments.emp.matrix, moments.block.m
 # LHS: https://www.rdocumentation.org/packages/pse/versions/0.4.7/topics/LHS
 library(lhs)
 
+# popsize 200  --> (0, 1000) --> 1
+# memory 200  --> (0, 500)  --> 5
+# pupdate 0.50  --> (0, 1)
+# startPrice 10 --> (10, 100) --> 10
+# interest 0.05  --> (0, 1)
+# dividend 0.5  --> (0, 10)
+# pshock 0.8  --> (0, 1)
+
 # Three parameters to begin with and their range, step size.
 n_param = 3
 pop = seq.int(0, 1000, 1)
@@ -234,6 +242,9 @@ get_initial_params <- function(n_lhc_set, n_param){
 
 # =================== STEP 6. Optimize parameters (Nelder-Mead) ===================
 # Nelder Mead: https://www.rdocumentation.org/packages/lme4/versions/1.1-13/topics/NelderMead
+
+n_rounds = 600
+
 # Gets moments from simulated model of n_rounds.
 get_moments_from_simulation <- function(simulation, n_rounds){
     simulation.cc = diff(log(simulation))
@@ -242,7 +253,7 @@ get_moments_from_simulation <- function(simulation, n_rounds){
     
     simulation.df = data.frame(
       "date" = simulation.date,
-      "price" = as.vector(run601[2:length(simulation)]),
+      "price" = as.vector(simulation[2:length(simulation)]),
       "simple" = simulation.simple,
       "cc" = simulation.cc
     )
@@ -252,7 +263,7 @@ get_moments_from_simulation <- function(simulation, n_rounds){
 }
 
 # Gets value to minimize from Eq12 in Frank - Westerhoff
-get_eq12_minimization <- function(x, n_rounds, moments.emp, weighting){
+get_eq12_minimization <- function(x){
   print("Parameters")
   print(x)
   
@@ -274,42 +285,33 @@ get_eq12_minimization <- function(x, n_rounds, moments.emp, weighting){
   return(result)
 }
 
-###### 
-get_eq12_minimization(c(488, 29, 9), 600, btc.moments.orig.matrix, btc.weighting)
+# Nelder Mead Optimize
+library(lme4)
+# Runs N-M Optimize function
+run_nm <- function(){
+    nm_result = Nelder_Mead(par=c(487, 140, 90),
+                           lower=c(0, 0, 10),
+                           upper=c(1000, 500, 100),
+                           fn=get_eq12_minimization, 
+                           control=list(maxfun=3,
+                                        xst=c(5, 5, 1)))
+    return(nm_result)
+}
 
-setwd("/Users/Jiin/Desktop/jiin-justin/mkt-bubbles")
-setwd("/Users/Jiin/Desktop/market_sim_ml_bubbles")
-##### TO REUSE DATA
+# =================== STEP 7. Run (Reusing Data) ===================
 btc.df = data.frame(read.csv("data/btc.csv"))
 btc.df$date = as.Date(btc.df$date)
 btc.ts = crypto_to_ts(btc.df)  # Time series data
 sp500.df = data.frame(read.csv("data/sp500.csv"))
 sp500.df$date = as.Date(sp500.df$date)
 sp500.ts = crypto_to_ts(sp500.df)  # Time series data
+
 load("data/btc.moments.emp.Rdata")
 load("data/btc.moments.block.100.Rdata")
 load("data/btc.weighting.Rdata")
+
 check_empirical_center(5, btc.moments.emp.matrix, btc.moments.block.100.matrix)
-###### Simulated model data.
-load("data/run601.Rdata")
-run601.df = read.csv("data/run601.csv")
 
-library(lme4)
-nm_result = Nelder_Mead(par=c(487, 140, 90),
-                       lower=c(0, 0, 10),
-                       upper=c(1000, 500, 100),
-                       fn=eq12, 
-                       control=list(maxfun=5,
-                                    xst=c(5, 5, 1)))
-nm_result$fval
-nm_result$par
-
-save(actual_lhs, file="actual_lhs.Rdata")
-
-# popsize 200  --> (0, 1000) --> 1
-# memory 200  --> (0, 500)  --> 5
-# pupdate 0.50  --> (0, 1)
-# startPrice 10 --> (10, 100) --> 10
-# interest 0.05  --> (0, 1)
-# dividend 0.5  --> (0, 10)
-# pshock 0.8  --> (0, 1)
+moments.emp = btc.moments.emp.matrix
+weighting = btc.weighting
+run_nm()
