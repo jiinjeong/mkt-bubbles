@@ -59,40 +59,40 @@ collect_sp500 <- function(){
 
 
 # =================== STEP 2. Basic Plots and Stats ===================
-basic_plots <- function(){
+basic_plots <- function(df){
     # Time series plot of historical Bitcoin price and returns
-    ggplot(btc.df, aes(x=date, y=price)) + geom_line()
-    ggplot(btc.df, aes(x=date)) + 
-      geom_line(aes(y=btc.cc), color="red") +
-      geom_line(aes(y=btc.simple), color="black")
-    
-    ggplot(sp500.df, aes(x=date, y=price)) + geom_line()
-    
+    price_plot <- ggplot(df, aes(x=date, y=price)) + geom_line()
+    return_plot <- ggplot(df, aes(x=date)) + 
+      geom_line(aes(y=cc), color="red") +
+      geom_line(aes(y=simple), color="black")
+
+    print(price_plot)
+    print(return_plot)
+
     # Histogram + QQPlot + More
     par(mfrow=c(2,2))
-    hist(btc.df$cc,main="BTC Daily Returns",
+    hist(df$cc,main="Daily Returns",
          xlab="btc", probability=T, col="slateblue1")
-    boxplot(btc.df$cc,outchar=T,col="slateblue1")
-    plot(density(btc.df$cc), main="smoothed density", 
+    boxplot(df$cc,outchar=T,col="slateblue1")
+    plot(density(df$cc), main="smoothed density", 
          type="l",xlab="daily return",
          ylab="density estimate")
-    qqnorm(btc.df$cc)
-    qqline(btc.df$cc)
+    qqnorm(df$cc)
+    qqline(df$cc)
     par(mfrow=c(1,1))
 }
 
-basic_stats <- function(){
-    sd(btc.ts)  # Std Dev
-    skewness(btc.ts)
-    kurtosis(btc.ts)
-    summary(btc.ts)
+basic_stats <- function(ts){
+    sd(ts)
+    skewness(ts)
+    kurtosis(ts)
+    summary(ts)
     
-    calc_q_ratio(btc.ts)
-    calc_hurst(btc.ts)
-    calc_hill(btc.ts)
-    calc_jb(btc.ts)
+    calc_q_ratio(ts)
+    calc_hurst(ts)
+    calc_hill(ts)
+    calc_jb(ts)
 }
-
 
 # =================== STEP 3. Moments ===================
 # Returns a 9 x 1 matrix of 9 moments calculated.
