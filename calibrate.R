@@ -5,94 +5,10 @@ library(forecast)  # Autocorrelation
 
 source("/Users/Jiin/Desktop/market_sim_ml_bubbles/core/singleRun.r")  # Prof. Georges' Single Run Code
 setwd("/Users/Jiin/Desktop/jiin-justin/mkt-bubbles")  # This Code Directory
-source("common.R")  # Fns for stylized facts
+source("common_tail.R")  # Fns for stylized facts
+source("common_calibrate.R")  # Fns for stylized facts
 options(scipen = 999)
 set.seed(1213)  # Randomness
-
-# =================== STEP 1. Collect historic data. ===================
-# ----------- a. Bitcoin Daily Data in USD
-collect_btc <- function(){
-    btc = coin_history(
-      coin_id = "bitcoin",
-      vs_currency = "usd",
-      days = "max",
-      interval = "daily")
-    
-    btc = btc[order(as.Date(btc$timestamp, format="%Y-%m-%d")),]  # Order by date
-    
-    # Calculate simple and CC (log) returns
-    btc.cc = diff(log(btc$price))
-    btc.simple = exp(btc.cc) - 1
-    btc.date = as.Date(btc$timestamp[2:length(btc$timestamp)])
-    
-    btc.df = data.frame(
-      "date" = btc.date,
-      "price" = as.vector(btc$price[2:length(btc$price)]),
-      "simple" = btc.simple,
-      "cc" = btc.cc
-    )
-    btc.ts = crypto_to_ts(btc.df)  # Time series data
-    # write.csv(btc.df, file="btc.csv")
-}
-
-# ----------- b. Vanguard S&P 500 Index Daily Data
-collect_sp500 <- function(){
-    sp500 = get.hist.quote(instrument="vfinx", quote="AdjClose",
-                          provider="yahoo", origin="1970-01-01",
-                          compression="d", retclass="zoo")
-    # start=start.date, end=end.date, 
-    sp500
-    sp500.cc = diff(log(sp500$Adjusted))
-    sp500.simple = exp(sp500.cc) - 1
-    sp500.date = as.Date(index(sp500)[2:length(sp500$Adjusted)])
-    sp500.df = data.frame(
-      "date" = sp500.date,
-      "price" = as.vector(sp500$Adjusted[2:length(sp500$Adjusted)]),
-      "simple" = sp500.simple,
-      "cc" = sp500.cc
-    )
-    rownames(sp500.df) = NULL
-    sp500.df
-    sp500.ts = crypto_to_ts(sp500.df)  # Time series data
-    # write.csv(sp500.df, file="sp500.csv")
-}
-
-
-# =================== STEP 2. Basic Plots and Stats ===================
-basic_plots <- function(df){
-    # Time series plot of historical Bitcoin price and returns
-    price_plot <- ggplot(df, aes(x=date, y=price)) + geom_line()
-    return_plot <- ggplot(df, aes(x=date)) + 
-      geom_line(aes(y=cc), color="red") +
-      geom_line(aes(y=simple), color="black")
-
-    print(price_plot)
-    print(return_plot)
-
-    # Histogram + QQPlot + More
-    par(mfrow=c(2,2))
-    hist(df$cc,main="Daily Returns",
-         xlab="btc", probability=T, col="slateblue1")
-    boxplot(df$cc,outchar=T,col="slateblue1")
-    plot(density(df$cc), main="smoothed density", 
-         type="l",xlab="daily return",
-         ylab="density estimate")
-    qqnorm(df$cc)
-    qqline(df$cc)
-    par(mfrow=c(1,1))
-}
-
-basic_stats <- function(ts){
-    sd(ts)
-    skewness(ts)
-    kurtosis(ts)
-    summary(ts)
-    
-    calc_q_ratio(ts)
-    calc_hurst(ts)
-    calc_hill(ts)
-    calc_jb(ts)
-}
 
 # =================== STEP 3. Moments ===================
 # Returns a 9 x 1 matrix of 9 moments calculated.
@@ -119,7 +35,7 @@ calc_moments <- function(ts){
   
   # Moment 9: Hill estimator
   m9 = as.numeric(calc_hill(ts))
-
+  
   moments = matrix(c(m1, m2, m3,
                      m4, m5, m6,
                      m7, m8, m9),
@@ -137,7 +53,7 @@ calc_moments <- function(ts){
 # 3. Compute moments of the new series from 2.
 # 4. Repeat steps 1-3 for 5k times. Get a frequency distribution for each of the moments. (Ideally, empirical in the center)
 
-k = 10  # 5000 to match the paper
+k = 5000  # 5000 to match the paper
 block_size = 500  # Diff block sizes later on (250, 750)
 n_moments = 9
 
@@ -261,6 +177,14 @@ get_moments_from_simulation <- function(simulation, n_rounds){
     return(simulation.moments)
 }
 
+calculate_j <- function(moments.vector, weighting, moments.emp){
+  eq9part1 = t(moments.vector - moments.emp)
+  eq9part2 = weighting
+  eq9part3 = moments.vector - moments.emp
+  result = eq9part1 %*% eq9part2 %*% eq9part3
+  return(result)
+}
+
 # Gets value to minimize from Eq12 in Frank - Westerhoff
 get_eq12_minimization <- function(x){
   print("Parameters")
@@ -272,12 +196,9 @@ get_eq12_minimization <- function(x){
   MO$startPrice = x[3]
   market = main(MarketObject = MO)
   moments.simulation = get_moments_from_simulation(market, n_rounds)
-  
-  eq12part1 = t(moments.simulation - moments.emp)
-  eq12part2 = weighting
-  eq12part3 = moments.simulation - moments.emp
+
   # (1 x 9) x (9 x 9)  x (9 x 1) --> int
-  result = eq12part1 %*% eq12part2 %*% eq12part3
+  result = calculate_j(moments.simulation, weighting, moments.emp)
 
   print("Minimization #")
   print(result)
@@ -304,6 +225,11 @@ btc.ts = crypto_to_ts(btc.df)  # Time series data
 sp500.df = data.frame(read.csv("data/sp500.csv"))
 sp500.df$date = as.Date(sp500.df$date)
 sp500.ts = crypto_to_ts(sp500.df)  # Time series data
+
+btc.bootstrap.3 = get_moments_block(btc.ts, 3, block_size, n_moments)
+calculate_j(btc.bootstrap.3[,1], btc.weighting, btc.moments.emp.matrix)
+
+btc.bootstrap.5000 = get_moments_block(btc.ts, k, block_size, n_moments)
 
 load("data/btc.moments.emp.Rdata")
 load("data/btc.moments.block.100.Rdata")
