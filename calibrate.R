@@ -1,16 +1,52 @@
-library(geckor)  # Collector for Coingecko API
-library(ggplot2)  # Plotting
 library(tseries)  # Times Series Data
 library(forecast)  # Autocorrelation
+library(evir)  # Hill
+library(lhs)  # Latin-hypercube
+library(lme4)  # Nelder-Meade
+library(xts)
 
-source("/Users/Jiin/Desktop/market_sim_ml_bubbles/core/singleRun.r")  # Prof. Georges' Single Run Code
-setwd("/Users/Jiin/Desktop/jiin-justin/mkt-bubbles")  # This Code Directory
-source("common_tail.R")  # Fns for stylized facts
-source("common_calibrate.R")  # Fns for stylized facts
+setwd("/Users/Jiin/Desktop/jiin-justin/hpc-mkt-bubbles")  # This Code Directory
 options(scipen = 999)
 set.seed(1213)  # Randomness
 
-# =================== STEP 3. Moments ===================
+# =================== STEP 1. Data ===================
+crypto_to_ts <- function(crypto_df){
+  crypto_df.revised = data.frame(crypto_df$cc)
+  colnames(crypto_df.revised) = "BTC"
+  rownames(crypto_df.revised) = crypto_df$date
+  crypto_ts = as.xts(crypto_df.revised)
+  return(crypto_ts)  # Time series!!!
+}
+
+btc.df = data.frame(read.csv("data/btc.csv"))
+btc.df$date = as.Date(btc.df$date)
+btc.ts = crypto_to_ts(btc.df)  # Time series data
+
+sp500.df = data.frame(read.csv("data/sp500.csv"))
+sp500.df$date = as.Date(sp500.df$date)
+sp500.ts = crypto_to_ts(sp500.df)  # Time series data
+
+# =================== STEP 2. Moments ===================
+# Hill
+calc_hill <- function(crypto_ts){
+  # Power law that best approximates the decay of left tail.
+  coin_left = (-1) * crypto_ts
+  # k --> More observations you use, bias. (Center - decays at faster pace, farther out - slower)
+  # Constant as unbiased.
+  # Speed of decay.
+  coin_hill_left = hill(coin_left,
+                        option = c("alpha","xi","quantile"),
+                        start = 15, end = NA, reverse = FALSE, p = NA,
+                        ci = 0.95, auto.scale = TRUE, labels = TRUE)
+  coin_huisman.df = as.data.frame(coin_hill_left)
+  # OLS Regression. (Linear model). control for k
+  lm_coin = lm(coin_huisman.df$y ~ coin_huisman.df$x)
+  # Constant - proxy for hill estimator corrected for bias.
+  # Exponent is 1 / hill. Report constant
+  huisman_coefficient = lm_coin$coefficients[1]
+  return(huisman_coefficient)
+}
+
 # Returns a 9 x 1 matrix of 9 moments calculated.
 calc_moments <- function(ts){
   # Moment 1: Mean value of the absolute returns
@@ -43,8 +79,7 @@ calc_moments <- function(ts){
   return(moments)
 }
 
-
-# =================== STEP 4. Block bootstrap & Weighting matrix ===================
+# =================== STEP 3. Block bootstrap & Weighting matrix ===================
 # https://rdrr.io/cran/tseries/man/tsbootstrap.html
 
 # 0. Reduce the time series.
@@ -53,14 +88,11 @@ calc_moments <- function(ts){
 # 3. Compute moments of the new series from 2.
 # 4. Repeat steps 1-3 for 5k times. Get a frequency distribution for each of the moments. (Ideally, empirical in the center)
 
-k = 5000  # 5000 to match the paper
-block_size = 500  # Diff block sizes later on (250, 750)
-n_moments = 9
-
 # Returns a block bootstrap time series.
 get_bootstrap <- function(ts, k, block_size){
     return(tsbootstrap(ts, type="block", b=block_size, nb=k))
 }
+#get_bootstrap(btc.ts, k, block_size)
 
 # Returns a 9 x 1 matrix of actual moments from the empirical data (BTC, S&P500).
 get_moments_emp <- function(ts){
@@ -116,23 +148,7 @@ check_empirical_center <- function(moment=1, moments.emp.matrix, moments.block.m
 
 # =================== STEP 5. Initialize parameters (Latin Hypercube) ===================
 # LHS: https://www.rdocumentation.org/packages/pse/versions/0.4.7/topics/LHS
-library(lhs)
-
-# popsize 200  --> (0, 1000) --> 1
-# memory 200  --> (0, 500)  --> 5
-# pupdate 0.50  --> (0, 1)
-# startPrice 10 --> (10, 100) --> 10
-# interest 0.05  --> (0, 1)
-# dividend 0.5  --> (0, 10)
-# pshock 0.8  --> (0, 1)
-
 # Three parameters to begin with and their range, step size.
-n_param = 3
-pop = seq.int(0, 1000, 1)
-memory = seq.int(0, 500, 5)
-startprice = seq.int(10, 100, 10)
-# params <- expand.grid(pop, memory, startprice)
-n_lhc_set = 10  # 10 combos of Latin Hypercube param sets
 
 # Gets initial params through Latin Hypercube
 get_initial_params <- function(n_lhc_set, n_param){
@@ -156,15 +172,11 @@ get_initial_params <- function(n_lhc_set, n_param){
 
 
 # =================== STEP 6. Optimize parameters (Nelder-Mead) ===================
-# Nelder Mead: https://www.rdocumentation.org/packages/lme4/versions/1.1-13/topics/NelderMead
-
-n_rounds = 600
-
 # Gets moments from simulated model of n_rounds.
 get_moments_from_simulation <- function(simulation, n_rounds){
     simulation.cc = diff(log(simulation))
     simulation.simple = exp(simulation.cc) - 1
-    simulation.date = seq.int(1, n_rounds, 1)
+    simulation.date = seq.int(1, n_rounds - 1, 1)
     
     simulation.df = data.frame(
       "date" = simulation.date,
@@ -205,8 +217,6 @@ get_eq12_minimization <- function(x){
   return(result)
 }
 
-# Nelder Mead Optimize
-library(lme4)
 # Runs N-M Optimize function
 run_nm <- function(){
     nm_result = Nelder_Mead(par=c(487, 140, 90),
@@ -218,25 +228,46 @@ run_nm <- function(){
     return(nm_result)
 }
 
-# =================== STEP 7. Run (Reusing Data) ===================
-btc.df = data.frame(read.csv("data/btc.csv"))
-btc.df$date = as.Date(btc.df$date)
-btc.ts = crypto_to_ts(btc.df)  # Time series data
-sp500.df = data.frame(read.csv("data/sp500.csv"))
-sp500.df$date = as.Date(sp500.df$date)
-sp500.ts = crypto_to_ts(sp500.df)  # Time series data
 
-btc.bootstrap.3 = get_moments_block(btc.ts, 3, block_size, n_moments)
-calculate_j(btc.bootstrap.3[,1], btc.weighting, btc.moments.emp.matrix)
+# =================== STEP 7. Things we can run in HPC ===================
+### Set up for HPC-1.
+k = 3  # 5000 to match the paper
+block_size = 500  # Diff block sizes later on (250, 750)
+n_moments = 9
 
-btc.bootstrap.5000 = get_moments_block(btc.ts, k, block_size, n_moments)
+### ====== HPC-1. One thing we can run in HPC
+btc.bootstrap.5000 = get_moments_block(btc.ts, k, block_size, n_moments)  # k = 5000
+save(btc.bootstrap.5000, file="btc.bootstrap.5000.Rdata")
 
+### Set up for HPC-2.
+# Moments and weighting matrix.
 load("data/btc.moments.emp.Rdata")
-load("data/btc.moments.block.100.Rdata")
-load("data/btc.weighting.Rdata")
-
-check_empirical_center(5, btc.moments.emp.matrix, btc.moments.block.100.matrix)
+load("data/btc.moments.block.100.Rdata")  # Need to replace this with HPC-1 result.
+load("data/btc.weighting.Rdata")  # Need to replace this with HPC-1 result.
 
 moments.emp = btc.moments.emp.matrix
 weighting = btc.weighting
-run_nm()
+
+# Latin hypercubes
+source("/Users/Jiin/Desktop/jiin-justin/hpc-mkt-bubbles/georges/singleRun.r")  # Prof. Georges' Single Run Code
+
+n_param = 3
+pop = seq.int(0, 1000, 1)
+memory = seq.int(0, 500, 5)
+startprice = seq.int(10, 100, 10)
+n_lhc_set = 10  # 10 combos of Latin Hypercube param sets
+
+# Simulation params
+n_rounds = 600  # Simulation
+#MO$numAgents = 200
+#MO$memory = 2
+#MO$startPrice = 10
+MO$numRounds = n_rounds
+
+# Test simulation run
+market = main(MarketObject = MO)
+moments.simulation = get_moments_from_simulation(market, n_rounds)
+
+### ====== HPC-2. Second thing we can run in HPC (We need output from HPC-1.)
+# Need to change the Nelder Mead starting parameters? (Latin Hypercube, max_runs = 3 --> 5000 or more)
+nm_result = run_nm()
