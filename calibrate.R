@@ -5,7 +5,7 @@ library(lhs)  # Latin-hypercube
 library(lme4)  # Nelder-Meade
 library(xts)
 
-setwd("/Users/Jiin/Desktop/jiin-justin/hpc-mkt-bubbles")  # This Code Directory
+setwd("/Users/Jiin/Desktop/mkt-bubbles")  # This Code Directory
 options(scipen = 999)
 set.seed(1213)  # Randomness
 
@@ -249,7 +249,7 @@ moments.emp = btc.moments.emp.matrix
 weighting = btc.weighting
 
 # Latin hypercubes
-source("/Users/Jiin/Desktop/jiin-justin/hpc-mkt-bubbles/georges/singleRun.r")  # Prof. Georges' Single Run Code
+source("/Users/Jiin/Desktop/mkt-bubbles/georges/singleRun.r")  # Prof. Georges' Single Run Code
 
 n_param = 3
 pop = seq.int(0, 1000, 1)

@@ -8,7 +8,7 @@
 
 #clear environment
 # Import functions library
-setwd("/Users/Jiin/Desktop/jiin-justin/hpc-mkt-bubbles/georges")  # This Code Directory
+setwd("/Users/Jiin/Desktop/mkt-bubbles/georges")  # This Code Directory
 source("Functions.r")
 source("Agents.r")
 source("Market.r")
