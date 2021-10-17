@@ -5,7 +5,10 @@ library(lhs)  # Latin-hypercube
 library(lme4)  # Nelder-Meade
 library(xts)
 
-setwd("/Users/Jiin/Desktop/mkt-bubbles")  # This Code Directory
+print('Loaded libraries...')
+
+# setwd("/Users/Jiin/Desktop/mkt-bubbles")  # This Code Directory
+setwd("/usr/local/research/compsci/seminar/mkt-bubbles")
 options(scipen = 999)
 set.seed(1213)  # Randomness
 
@@ -146,31 +149,6 @@ check_empirical_center <- function(moment=1, moments.emp.matrix, moments.block.m
   moments.emp.matrix[moment]  # 1st item.
 }
 
-# =================== STEP 5. Initialize parameters (Latin Hypercube) ===================
-# LHS: https://www.rdocumentation.org/packages/pse/versions/0.4.7/topics/LHS
-# Three parameters to begin with and their range, step size.
-
-# Gets initial params through Latin Hypercube
-get_initial_params <- function(n_lhc_set, n_param){
-  X <- randomLHS(n = n_lhc_set, k = n_param)
-  Y <- X
-  lengths <- c(length(pop), length(memory), length(startprice))
-  # These are indices
-  for (i in 1:n_param){
-    Y[,i] <- 1 + floor(Y[,i] * lengths[i])  # Store in each column (Column 1: Pop, 2: Memory, 3: StartPrice)
-  }
-  # These are the actual params
-  actual_lhs = matrix(nrow=n_lhc_set, ncol=n_param)
-  for (i in 1:n_lhc_set){
-    row = Y[i,]
-    actual_lhs[i,1] = pop[row[1]]
-    actual_lhs[i,2] = memory[row[2]]
-    actual_lhs[i,3] = startprice[row[3]]
-  }
-  return(actual_lhs)  # LHC Combo params
-}
-
-
 # =================== STEP 6. Optimize parameters (Nelder-Mead) ===================
 # Gets moments from simulated model of n_rounds.
 get_moments_from_simulation <- function(simulation, n_rounds){
@@ -197,77 +175,75 @@ calculate_j <- function(moments.vector, weighting, moments.emp){
   return(result)
 }
 
+count <- 1
 # Gets value to minimize from Eq12 in Frank - Westerhoff
 get_eq12_minimization <- function(x){
   print("Parameters")
   print(x)
   
   # Get market simulation (using Prof. Georges code)
-  MO$numAgents = round(x[1])
-  MO$memory = round(x[2])
-  MO$startPrice = x[3]
+  MO$memory = round(x[1])
+  MO$randSeed = sample(1:2^15, 1)
+  MO$lags = round(x[6])
+  MO$powers = round(x[7])
   market = main(MarketObject = MO)
-  moments.simulation = get_moments_from_simulation(market, n_rounds)
+  moments.simulation = get_moments_from_simulation(market, MO$numRounds)
 
   # (1 x 9) x (9 x 9)  x (9 x 1) --> int
   result = calculate_j(moments.simulation, weighting, moments.emp)
 
   print("Minimization #")
+  print(count)
+  count <<- count + 1
   print(result)
   return(result)
 }
 
 # Runs N-M Optimize function
-run_nm <- function(){
-    nm_result = Nelder_Mead(par=c(487, 140, 90),
-                           lower=c(0, 0, 10),
-                           upper=c(1000, 500, 100),
-                           fn=get_eq12_minimization, 
-                           control=list(maxfun=3,
-                                        xst=c(5, 5, 1)))
+run_nm <- function(p){
+    nm_result = Nelder_Mead(par=p,
+                            lower=c(0, 0, 0, 0, 0, 1, 0, 0),
+                            upper=c(100, 1, 1, 1, 1, 3, 3, .1),
+                            fn=get_eq12_minimization, 
+                            control=list(maxfun=50000))
     return(nm_result)
 }
 
 
 # =================== STEP 7. Things we can run in HPC ===================
 ### Set up for HPC-1.
-k = 3  # 5000 to match the paper
+k = 5000  # 5000 to match the paper
 block_size = 500  # Diff block sizes later on (250, 750)
 n_moments = 9
 
-### ====== HPC-1. One thing we can run in HPC
-btc.bootstrap.5000 = get_moments_block(btc.ts, k, block_size, n_moments)  # k = 5000
-save(btc.bootstrap.5000, file="btc.bootstrap.5000.Rdata")
+# ### ====== HPC-1. One thing we can run in HPC
+# print('starting bootstrap')
+# btc.bootstrap.5000 = get_moments_block(btc.ts, k, block_size, n_moments)  # k = 5000
+# print(btc.bootstrap.5000)
+# save(btc.bootstrap.5000, file="btc.bootstrap.5000.Rdata")
+# print('saved')
 
 ### Set up for HPC-2.
 # Moments and weighting matrix.
 load("data/btc.moments.emp.Rdata")
-load("data/btc.moments.block.100.Rdata")  # Need to replace this with HPC-1 result.
-load("data/btc.weighting.Rdata")  # Need to replace this with HPC-1 result.
+# load("data/btc.moments.block.100.Rdata")  # Need to replace this with HPC-1 result.
+# load("data/btc.weighting.Rdata")  # Need to replace this with HPC-1 result.
+load("data/btc.weighting.5000.Rdata")
+print('Loaded data...')
 
 moments.emp = btc.moments.emp.matrix
-weighting = btc.weighting
+weighting = btc.bootstrap.5000.weighting # Correct name?
 
 # Latin hypercubes
-source("/Users/Jiin/Desktop/mkt-bubbles/georges/singleRun.r")  # Prof. Georges' Single Run Code
-
-n_param = 3
-pop = seq.int(0, 1000, 1)
-memory = seq.int(0, 500, 5)
-startprice = seq.int(10, 100, 10)
-n_lhc_set = 10  # 10 combos of Latin Hypercube param sets
-
-# Simulation params
-n_rounds = 600  # Simulation
-#MO$numAgents = 200
-#MO$memory = 2
-#MO$startPrice = 10
-MO$numRounds = n_rounds
-
-# Test simulation run
-market = main(MarketObject = MO)
-moments.simulation = get_moments_from_simulation(market, n_rounds)
+source("/usr/local/research/compsci/seminar/mkt-bubbles/georges/singleRun.r")  # Prof. Georges' Single Run Code
+print("Switched to singleRun directory...")
 
 ### ====== HPC-2. Second thing we can run in HPC (We need output from HPC-1.)
 # Need to change the Nelder Mead starting parameters? (Latin Hypercube, max_runs = 3 --> 5000 or more)
-nm_result = run_nm()
+
+args = commandArgs(trailingOnly=TRUE)
+args = as.numeric(args)
+
+print('Running Nelder-Mead')
+nm_result = run_nm(args)
+print('donezo')

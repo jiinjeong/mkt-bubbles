@@ -1,0 +1,16 @@
+#!/bin/bash
+
+#PBS -N calibr8n_1
+#PBS -l nodes=10:ppn=4
+#PBS -l mem=20GB 
+#PBS -l walltime=72:00:00
+#PBS -q una
+#PBS -M jmarler@hamilton.edu
+#PBS -m e
+
+module load R/3.5.0
+
+cd $PBS_O_WORKDIR
+export OMP_NUM_THREADS=1
+
+time Rscript calibrate.R  10  0.6  0.8  0.3  0.0    1    1 0.08 > log_1.txt

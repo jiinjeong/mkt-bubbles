@@ -1,11 +1,11 @@
-popsize 200
+popsize 100
 priceDifThreshold 0.5
-saveData 1
-rounds 1001
+saveData 0
+rounds 2501
 linit 500
 memory 200
 pupdate 0.50
-randSeed 3
+randSeed 0
 lags 2
 powers 2
 numBubbles 0
@@ -21,10 +21,9 @@ risk_type 0
 pshock 0.8
 runType 3
 selection_type 0
-recordOA_start 700
-recordOA_end 710
-numberPredictors 5
-normalizeInputs 1
+recordOA_start 0
+recordOA_end 0
+numberPredictors 6
+normalizeInputs 0
 testing 0
 forecast2ahead 0
-
