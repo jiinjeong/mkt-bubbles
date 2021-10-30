@@ -39,7 +39,7 @@ dividends = seq(0, 1, 0.1)
 pshocks = seq(0, 1, 0.1)
 shockRangeDivs = seq(0.1, 1, 0.1)
 lags = seq(1, 3, 1)
-powers = seq(0, 3, 1)
+powers = seq(1, 3, 1)
 interests = seq(0, .1, 0.01)
 
 n_lhc_set = 10  # 10 combos of Latin Hypercube param sets

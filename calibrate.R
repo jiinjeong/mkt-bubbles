@@ -212,7 +212,7 @@ get_eq12_minimization <- function(x){
 # Runs N-M Optimize function
 run_nm <- function(p){
     nm_result = Nelder_Mead(par=p,
-                            lower=c(0, 0, 0, 0, 0, 1, 0, 0),
+                            lower=c(10, 0, 0, 0, 0.1, 1, 1, 0),
                             upper=c(100, 1, 1, 1, 1, 3, 3, .1),
                             fn=get_eq12_minimization, 
                             control=list(maxfun=50000))
