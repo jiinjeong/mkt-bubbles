@@ -33,7 +33,7 @@ get_initial_params <- function(n_lhc_set, n_param){
 }
 
 n_param = 8
-memories = seq.int(0, 100, 10)
+memories = seq.int(10, 100, 10)
 pupdates = seq(0, 1, 0.1)
 dividends = seq(0, 1, 0.1)
 pshocks = seq(0, 1, 0.1)
