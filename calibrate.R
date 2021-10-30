@@ -41,7 +41,8 @@ calc_hill <- function(crypto_ts){
   coin_hill_left = hill(coin_left,
                         option = c("alpha","xi","quantile"),
                         start = 15, end = NA, reverse = FALSE, p = NA,
-                        ci = 0.95, auto.scale = TRUE, labels = TRUE)
+                        ci = 0.95, auto.scale = FALSE,
+                        ylim = c(0,300), xlim = c(0,300),labels = TRUE)
   coin_huisman.df = as.data.frame(coin_hill_left)
   # OLS Regression. (Linear model). control for k
   lm_coin = lm(coin_huisman.df$y ~ coin_huisman.df$x)
@@ -165,11 +166,16 @@ get_moments_from_simulation <- function(simulation){
     )
 
     simulation.ts = simulation.df$cc
-    simulation.moments = calc_moments(simulation.ts[500:length(simulation) - 1])
+    start = 500
+    if (length(simulation) <= 600) {
+      start = 500 - (600 - length(simulation))
+    }
+    simulation.moments = calc_moments(simulation.ts[start:length(simulation) - 1])
     return(simulation.moments)
 }
 
 calculate_j <- function(moments.vector, weighting, moments.emp){
+  print(moments.vector)
   eq9part1 = t(moments.vector - moments.emp)
   eq9part2 = weighting
   eq9part3 = moments.vector - moments.emp

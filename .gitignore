@@ -43,3 +43,4 @@ vignettes/*.pdf
 
 # Log Files
 log_[0-9]*.txt
+*.pdf

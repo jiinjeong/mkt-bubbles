@@ -35,12 +35,12 @@ get_initial_params <- function(n_lhc_set, n_param){
 n_param = 8
 memories = seq.int(10, 100, 10)
 pupdates = seq(0, 1, 0.1)
-dividends = seq(0, 1, 0.1)
+dividends = seq(0.1, 1, 0.1)
 pshocks = seq(0, 1, 0.1)
 shockRangeDivs = seq(0.1, 1, 0.1)
 lags = seq(1, 3, 1)
 powers = seq(1, 3, 1)
-interests = seq(0, .1, 0.01)
+interests = seq(0.01, .1, 0.01)
 
 n_lhc_set = 10  # 10 combos of Latin Hypercube param sets
 print(get_initial_params(n_lhc_set, n_param))
