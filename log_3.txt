@@ -1,7 +1,0 @@
-[1] "Loaded libraries..."
-[1] "Loaded data..."
-[1] "Switched to singleRun directory..."
-[1] "Running Nelder-Mead"
-[1] "Parameters"
-[1] 100.00   0.00   0.40   0.70   0.50   2.00   1.00   0.06
-[1] "hi"

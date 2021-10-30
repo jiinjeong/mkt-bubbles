@@ -49,9 +49,11 @@ main = function(MarketObject) {
     } else if ( (round > (MarketObject$lags + 1))&(round <= MarketObject$lInit ) ) {
       MarketObject$createInitialData(round)
     } else if (MarketObject$prices[round - 1] > MarketObject$bubbleThresholdHigh) {
-      return (c(1, round, MarketObject$memory, MarketObject$pUpDate, MarketObject$thresholdTally, MarketObject$prices[round-1], 1, MarketObject$randSeed))
+      return (MarketObject$prices)
+      #return (c(1, round, MarketObject$memory, MarketObject$pUpDate, MarketObject$thresholdTally, MarketObject$prices[round-1], 1, MarketObject$randSeed))
     } else if (MarketObject$prices[round - 1] < MarketObject$bubbleThresholdLow) {
-      return (c(1, round, MarketObject$memory, MarketObject$pUpDate, MarketObject$thresholdTally, MarketObject$prices[round-1], 0, MarketObject$randSeed))
+      return (MarketObject$prices[1:length(MarketObject$prices) - 1]) # assuming threshold = 0 or negative price
+      #return (c(1, round, MarketObject$memory, MarketObject$pUpDate, MarketObject$thresholdTally, MarketObject$prices[round-1], 0, MarketObject$randSeed))
     } else {
       MarketObject$simulation(round)
       

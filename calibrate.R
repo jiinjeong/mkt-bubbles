@@ -9,6 +9,7 @@ print('Loaded libraries...')
 
 # setwd("/Users/Jiin/Desktop/mkt-bubbles")  # This Code Directory
 setwd("/usr/local/research/compsci/seminar/mkt-bubbles")
+# setwd("~/Desktop/mkt-bubbles")
 options(scipen = 999)
 set.seed(1213)  # Randomness
 
@@ -151,10 +152,10 @@ check_empirical_center <- function(moment=1, moments.emp.matrix, moments.block.m
 
 # =================== STEP 6. Optimize parameters (Nelder-Mead) ===================
 # Gets moments from simulated model of n_rounds.
-get_moments_from_simulation <- function(simulation, n_rounds){
+get_moments_from_simulation <- function(simulation){
     simulation.cc = diff(log(simulation))
     simulation.simple = exp(simulation.cc) - 1
-    simulation.date = seq.int(1, n_rounds - 1, 1)
+    simulation.date = seq.int(1, length(simulation) - 1, 1)
     
     simulation.df = data.frame(
       "date" = simulation.date,
@@ -162,6 +163,7 @@ get_moments_from_simulation <- function(simulation, n_rounds){
       "simple" = simulation.simple,
       "cc" = simulation.cc
     )
+
     simulation.ts = simulation.df$cc
     simulation.moments = calc_moments(simulation.ts[500:length(simulation) - 1])
     return(simulation.moments)
@@ -186,8 +188,16 @@ get_eq12_minimization <- function(x){
   MO$randSeed = sample(1:2^15, 1)
   MO$lags = round(x[6])
   MO$powers = round(x[7])
+  MO$size = (3 + (MO$powers * MO$lags) + (((MO$lags-1) * (MO$lags)) / 2))
+  MO$shockRangeDiv = x[5]
+  MO$interest = x[8]
+  MO$dividend = x[3]
+  MO$pUpDate = x[2]
+  MO$pShock = x[4]
+  MO$bubbleThresholdLow = 0
+  MO$bubbleThresholdHigh = 2 * (MO$dividend / MO$interest)
   market = main(MarketObject = MO)
-  moments.simulation = get_moments_from_simulation(market, MO$numRounds)
+  moments.simulation = get_moments_from_simulation(market)
 
   # (1 x 9) x (9 x 9)  x (9 x 1) --> int
   result = calculate_j(moments.simulation, weighting, moments.emp)
@@ -236,6 +246,7 @@ weighting = btc.bootstrap.5000.weighting # Correct name?
 
 # Latin hypercubes
 source("/usr/local/research/compsci/seminar/mkt-bubbles/georges/singleRun.r")  # Prof. Georges' Single Run Code
+# source("./georges/singleRun.r")
 print("Switched to singleRun directory...")
 
 ### ====== HPC-2. Second thing we can run in HPC (We need output from HPC-1.)
