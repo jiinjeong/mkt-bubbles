@@ -13,8 +13,8 @@ setwd("/usr/local/research/compsci/seminar/mkt-bubbles")
 options(scipen = 999)
 set.seed(1213)  # Randomness
 
-# =================== STEP 1. Data ===================
-crypto_to_ts <- function(crypto_df){
+# =================== STEP 1. Data =============================================
+crypto_to_ts <- function(crypto_df) {
   crypto_df.revised = data.frame(crypto_df$cc)
   colnames(crypto_df.revised) = "BTC"
   rownames(crypto_df.revised) = crypto_df$date
@@ -30,9 +30,9 @@ sp500.df = data.frame(read.csv("data/sp500.csv"))
 sp500.df$date = as.Date(sp500.df$date)
 sp500.ts = crypto_to_ts(sp500.df)  # Time series data
 
-# =================== STEP 2. Moments ===================
+# =================== STEP 2. Moments ==========================================
 # Hill
-calc_hill <- function(crypto_ts){
+calc_hill <- function(crypto_ts) {
   # Power law that best approximates the decay of left tail.
   coin_left = (-1) * crypto_ts
   # k --> More observations you use, bias. (Center - decays at faster pace, farther out - slower)
@@ -53,7 +53,7 @@ calc_hill <- function(crypto_ts){
 }
 
 # Returns a 9 x 1 matrix of 9 moments calculated.
-calc_moments <- function(ts){
+calc_moments <- function(ts) {
   # Moment 1: Mean value of the absolute returns
   m1 = mean(abs(ts))
 
@@ -84,28 +84,29 @@ calc_moments <- function(ts){
   return(moments)
 }
 
-# =================== STEP 3. Block bootstrap & Weighting matrix ===================
+# =================== STEP 3. Block bootstrap & Weighting matrix ===============
 # https://rdrr.io/cran/tseries/man/tsbootstrap.html
 
 # 0. Reduce the time series.
 # 1. Subdivide the time series into X non-overlapping number of blocks.
 # 2. Construct a new series, from X random draws with replacement
 # 3. Compute moments of the new series from 2.
-# 4. Repeat steps 1-3 for 5k times. Get a frequency distribution for each of the moments. (Ideally, empirical in the center)
+# 4. Repeat steps 1-3 for 5k times. Get a frequency distribution for each of the
+#    moments. (Ideally, empirical in the center)
 
 # Returns a block bootstrap time series.
-get_bootstrap <- function(ts, k, block_size){
+get_bootstrap <- function(ts, k, block_size) {
     return(tsbootstrap(ts, type="block", b=block_size, nb=k))
 }
 #get_bootstrap(btc.ts, k, block_size)
 
-# Returns a 9 x 1 matrix of actual moments from the empirical data (BTC, S&P500).
-get_moments_emp <- function(ts){
+# Returns a 9x1 matrix of actual moments from the empirical data (BTC, S&P500).
+get_moments_emp <- function(ts) {
   return(calc_moments(ts))
 }
 
-# Returns a 9 x k (5000) matrix of moments from the blocks.
-get_moments_block <- function(ts, k, block_size, n_moments){
+# Returns a 9xk (5000) matrix of moments from the blocks.
+get_moments_block <- function(ts, k, block_size, n_moments) {
   boot = get_bootstrap(ts, k, block_size)
   moments.block.matrix = matrix(nrow=n_moments, ncol=k)  # 9 row x k col
 
@@ -119,14 +120,15 @@ get_moments_block <- function(ts, k, block_size, n_moments){
   return(moments.block.matrix)
 }
 
-# Returns a 9 x 1 mean matrix of all block moments.
-get_moments_block_mean <- function(moments.block.matrix){
+# Returns a 9x1 mean matrix of all block moments.
+get_moments_block_mean <- function(moments.block.matrix) {
     return(matrix(rowMeans(moments.block.matrix),
                   nrow=n_moments, ncol=1))
 }
 
-# Gets a 9 x 9 weighting matrix. (Eq 10 & 11 in Frank-Westerhoff)
-get_weighting_matrix <- function(moments.block.matrix, moments.block.mean.matrix){
+# Gets a 9x9 weighting matrix. (Eq 10 & 11 in Frank-Westerhoff)
+get_weighting_matrix <- function(moments.block.matrix, 
+                                 moments.block.mean.matrix) {
     total_sum = matrix(rep(0, 81), nrow=9, ncol=9)
     for (i in 1:k) {
       mb = moments.block.matrix[,i] - moments.block.mean.matrix
@@ -142,8 +144,9 @@ get_weighting_matrix <- function(moments.block.matrix, moments.block.mean.matrix
     return(weighting)
 }
 
-# Checks whether the center of the desired moment's frequency distribution = empirical center.
-check_empirical_center <- function(moment=1, moments.emp.matrix, moments.block.matrix){
+# Checks whether the center of the moment's distribution = empirical center.
+check_empirical_center <- function(moment=1, moments.emp.matrix,
+                                   moments.block.matrix) {
   # First row matrix
   plot(density(moments.block.matrix[moment,]), main="smoothed density", 
        type="l",xlab="daily return",
@@ -151,9 +154,9 @@ check_empirical_center <- function(moment=1, moments.emp.matrix, moments.block.m
   moments.emp.matrix[moment]  # 1st item.
 }
 
-# =================== STEP 6. Optimize parameters (Nelder-Mead) ===================
+# =================== STEP 6. Optimize parameters (Nelder-Mead) ================
 # Gets moments from simulated model of n_rounds.
-get_moments_from_simulation <- function(simulation){
+get_moments_from_simulation <- function(simulation) {
     simulation.cc = diff(log(simulation))
     simulation.simple = exp(simulation.cc) - 1
     simulation.date = seq.int(1, length(simulation) - 1, 1)
@@ -174,7 +177,7 @@ get_moments_from_simulation <- function(simulation){
     return(simulation.moments)
 }
 
-calculate_j <- function(moments.vector, weighting, moments.emp){
+calculate_j <- function(moments.vector, weighting, moments.emp) {
   print(moments.vector)
   eq9part1 = t(moments.vector - moments.emp)
   eq9part2 = weighting
@@ -185,7 +188,7 @@ calculate_j <- function(moments.vector, weighting, moments.emp){
 
 count <- 1
 # Gets value to minimize from Eq12 in Frank - Westerhoff
-get_eq12_minimization <- function(x){
+get_eq12_minimization <- function(x) {
   print("Parameters")
   print(x)
   
@@ -208,15 +211,14 @@ get_eq12_minimization <- function(x){
   # (1 x 9) x (9 x 9)  x (9 x 1) --> int
   result = calculate_j(moments.simulation, weighting, moments.emp)
 
-  print("Minimization #")
-  print(count)
+  print(paste0("Minimization #", count))
   count <<- count + 1
   print(result)
   return(result)
 }
 
 # Runs N-M Optimize function
-run_nm <- function(p){
+run_nm <- function(p) {
     nm_result = Nelder_Mead(par=p,
                             lower=c(10, 0, 0, 0, 0.1, 1, 1, 0),
                             upper=c(100, 1, 1, 1, 1, 3, 3, .1),
@@ -226,15 +228,15 @@ run_nm <- function(p){
 }
 
 
-# =================== STEP 7. Things we can run in HPC ===================
+# =================== STEP 7. HPC Runs ===================
 ### Set up for HPC-1.
 k = 5000  # 5000 to match the paper
 block_size = 500  # Diff block sizes later on (250, 750)
 n_moments = 9
 
-# ### ====== HPC-1. One thing we can run in HPC
+# ### ====== HPC-1 ===================
 # print('starting bootstrap')
-# btc.bootstrap.5000 = get_moments_block(btc.ts, k, block_size, n_moments)  # k = 5000
+# btc.bootstrap.5000 = get_moments_block(btc.ts, k, block_size, n_moments)
 # print(btc.bootstrap.5000)
 # save(btc.bootstrap.5000, file="btc.bootstrap.5000.Rdata")
 # print('saved')
@@ -242,25 +244,22 @@ n_moments = 9
 ### Set up for HPC-2.
 # Moments and weighting matrix.
 load("data/btc.moments.emp.Rdata")
-# load("data/btc.moments.block.100.Rdata")  # Need to replace this with HPC-1 result.
-# load("data/btc.weighting.Rdata")  # Need to replace this with HPC-1 result.
 load("data/btc.weighting.5000.Rdata")
 print('Loaded data...')
 
 moments.emp = btc.moments.emp.matrix
-weighting = btc.bootstrap.5000.weighting # Correct name?
+weighting = btc.bootstrap.5000.weighting
 
 # Latin hypercubes
-source("/usr/local/research/compsci/seminar/mkt-bubbles/georges/singleRun.r")  # Prof. Georges' Single Run Code
+# Prof. Georges' Single Run Code
+source("/usr/local/research/compsci/seminar/mkt-bubbles/georges/singleRun.r")
 # source("./georges/singleRun.r")
 print("Switched to singleRun directory...")
 
-### ====== HPC-2. Second thing we can run in HPC (We need output from HPC-1.)
-# Need to change the Nelder Mead starting parameters? (Latin Hypercube, max_runs = 3 --> 5000 or more)
-
+### ====== HPC-2 ===================
 args = commandArgs(trailingOnly=TRUE)
 args = as.numeric(args)
 
-print('Running Nelder-Mead')
+print('Running Nelder-Mead...')
 nm_result = run_nm(args)
-print('donezo')
+print('Done.')
