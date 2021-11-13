@@ -189,20 +189,19 @@ calculate_j <- function(moments.vector, weighting, moments.emp) {
 count <- 1
 # Gets value to minimize from Eq12 in Frank - Westerhoff
 get_eq12_minimization <- function(x) {
-  print("Parameters")
-  print(x)
+  print(paste0("Parameters", x))
   
   # Get market simulation (using Prof. Georges code)
-  MO$memory = round(x[1])
+  MO$memory = memory
   MO$randSeed = sample(1:2^15, 1)
-  MO$lags = round(x[6])
-  MO$powers = round(x[7])
+  MO$lags = lags
+  MO$powers = powers
   MO$size = (3 + (MO$powers * MO$lags) + (((MO$lags-1) * (MO$lags)) / 2))
-  MO$shockRangeDiv = x[5]
-  MO$interest = x[8]
-  MO$dividend = x[3]
-  MO$pUpDate = x[2]
-  MO$pShock = x[4]
+  MO$shockRangeDiv = x[4]
+  MO$interest = x[5]
+  MO$dividend = x[2]
+  MO$pUpDate = x[1]
+  MO$pShock = x[3]
   MO$bubbleThresholdLow = 0
   MO$bubbleThresholdHigh = 2 * (MO$dividend / MO$interest)
   market = main(MarketObject = MO)
@@ -220,8 +219,8 @@ get_eq12_minimization <- function(x) {
 # Runs N-M Optimize function
 run_nm <- function(p) {
     nm_result = Nelder_Mead(par=p,
-                            lower=c(10, 0, 0, 0, 0.1, 1, 1, 0),
-                            upper=c(100, 1, 1, 1, 1, 3, 3, .1),
+                            lower=c(0, 0, 0, .1, 0),
+                            upper=c(1, 1, 1, 1, .1),
                             fn=get_eq12_minimization, 
                             control=list(maxfun=50000))
     return(nm_result)
@@ -259,6 +258,11 @@ print("Switched to singleRun directory...")
 ### ====== HPC-2 ===================
 args = commandArgs(trailingOnly=TRUE)
 args = as.numeric(args)
+
+memory <- args[1]
+lags <- args[2]
+powers <- args[3]
+nm_args = args[4:length(args)]
 
 print('Running Nelder-Mead...')
 nm_result = run_nm(args)
