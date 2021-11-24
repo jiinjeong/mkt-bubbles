@@ -13,4 +13,4 @@ module load R/3.5.0
 cd $PBS_O_WORKDIR
 export OMP_NUM_THREADS=1
 
-time Rscript calibrate.R #memory# #lags# #powers# #LHS# > logs/log_#count#.txt
+time Rscript calibrate.R #memory# #lags# #powers# #LHS# &> logs/log_#count#.txt
